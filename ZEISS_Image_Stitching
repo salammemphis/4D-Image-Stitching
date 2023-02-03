@@ -1,0 +1,244 @@
+Bootstrap: docker
+From: ubuntu:latest
+%help
+Help me. I'm in the container.
+
+%setup
+
+
+%files
+	/home/salam/Study/IPP/ants/SingularityBuild/img_stitch_latest/home/fiji-linux64/ /home/
+%labels
+    Maintainer Shahinur
+    Version 1.0
+
+%environment
+
+
+%post
+
+	apt-get update && apt-get install -y
+	apt-get update && DEBIAN_FRONTEND="noninteractive" TZ="America/New_York" apt-get install -y tzdata
+	apt-get install -y build-essential
+	apt-get install -y g++
+	apt-get install -y zlib1g-dev
+	apt-get install -y git
+	apt-get install -y cmake
+	apt-get install -y jq
+	apt-get install -y python3-pip python3-dev
+	apt-get install -y python3-tk
+	pip3 install numpy pynrrd 
+	pip3 install tifffile
+	pip3 install scipy 
+	pip3 install pandas sklearn scikit-image webcolors plotly matplotlib statsmodels factorial 
+	pip3 install czifile
+	
+%runscript
+#!/bin/bash
+echo "Arguments received: $*"
+use_bigstitcher=`cat $1 | jq -r '.use_bigstitcher'`
+input_folder=`cat $1 | jq -r '.input_folder'`
+output_folder=`cat $1 | jq -r '.outputfile'`
+
+
+param_len=${#input_folder}
+
+tmp_c=`expr substr "$input_folder" $param_len 1`
+if [ "$tmp_c" = "/" ]; then
+	param_len=`expr $param_len - 1`
+	input_folder=`expr substr "$input_folder" 1 $param_len`
+
+fi
+
+
+param_len=${#output_folder}
+
+tmp_c=`expr substr "$output_folder" $param_len 1`
+echo "here $tmp_c"
+if [ "$tmp_c" = "/" ]; then
+	param_len=`expr $param_len - 1`
+	output_folder=`expr substr "$output_folder" 1 $param_len`
+	echo "here $output_folder"
+
+fi
+
+
+
+
+##Big Stitcher
+
+if [ "$use_bigstitcher" = "True" ]; then
+
+	
+
+	if [ -d "$input_folder" ] &&  [ -d "$output_folder" ]; then
+
+		input_dir=$input_folder
+		output_dir=$output_folder
+		total_time_point=`cat $1 | jq -r '.frames'`
+		tilesX=`cat $1 | jq -r '.tilesX'`
+		tilesY=`cat $1 | jq -r '.tilesY'`
+		tiles_z=`cat $1 | jq -r '.tiles_z'`
+		file_pattern=`cat $1 | jq -r '.file_pattern'`
+		grid_type=`cat $1 | jq -r '.grid_type'`
+		overlap_x=`cat $1 | jq -r '.overlap_x'`
+		overlap_y=`cat $1 | jq -r '.overlap_y'`
+		overlap_z=`cat $1 | jq -r '.overlap_z'`
+		voxel_size_x=`cat $1 | jq -r '.voxel_size_x'`
+		voxel_size_y=`cat $1 | jq -r '.voxel_size_y'`
+		voxel_size_z=`cat $1 | jq -r '.voxel_size_z'`
+		voxel_size_unit=`cat $1 | jq -r '.voxel_size_unit'`
+		method=`cat $1 | jq -r '.method'`
+		downsampleBy=`cat $1 | jq -r '.downsampleBy'`
+		numChannel=`cat $1 | jq -r '.numChannel'`
+		file_pattern_defination_bigstitch=`cat $1 | jq -r '.file_pattern_defination'`
+		exportType=`cat $1 | jq -r '.Export_Type'`
+		hdf_chunk_size=`cat $1 | jq -r '.hdf_chunk_size'`
+		
+		basePath=$input_dir
+		output_save=$output_dir/final_output/
+		timepoint_ctr=1
+		timepoint_act=0
+		mkdir $output_dir/final_output
+		sequence=`date +%s`
+		log_file="${output_dir}/log_${sequence}.txt"
+		metadata_file="${output_dir}/metadata_${sequence}.json"
+		touch $log_file
+		
+		echo "${basePath}/##${tilesX}##${tilesY}##${tiles_z}##${file_pattern}##${grid_type}##${overlap_x}##${overlap_y}##${overlap_z}##${voxel_size_x}##${voxel_size_y}##${voxel_size_z}##${voxel_size_unit}##${method}##${output_save}##${downsampleBy}##${file_pattern_defination_bigstitch}" >> $log_file
+		if [[ "${file_pattern}" = *".czi"* ]]; then
+			echo "called CZI" >> ${log_file}
+			if [ "$tilesX" = "" ] || [ "$tilesY" = "" ] || [ "$tiles_z" = "" ] || [ "$voxel_size_x" = "" ] || [ "$voxel_size_y" = "" ] || [ "$voxel_size_z" = "" ] ; then
+				echo "filling empty info see: ${metadata_file}" >> ${log_file}
+				python3 /home/fiji-linux64/Fiji.app/ReadMetadataFrmCzi.py "${input_dir}##${file_pattern}##${output_dir}##${metadata_file}"
+				while true ; do
+					if [ -e "${metadata_file}" ]; then
+						break
+					else
+						sleep 5
+					fi
+						
+				done
+
+				tilesX=`cat $metadata_file | jq -r '.tileX'`
+				tilesY=`cat $metadata_file | jq -r '.tileY'`
+				overlap_x=`cat $metadata_file | jq -r '.Tile_overlap'`
+				overlap_y=`cat $metadata_file | jq -r '.Tile_overlap'`
+				overlap_z=`cat $metadata_file | jq -r '.Tile_overlap'`
+				voxel_size_x=`cat $metadata_file | jq -r '.voxelX'`
+				voxel_size_y=`cat $metadata_file | jq -r '.voxelY'`
+				voxel_size_z=`cat $metadata_file | jq -r '.voxelZ'`
+				numChannel=`cat $metadata_file | jq -r '.num_chann'`
+				
+			fi
+		fi
+		
+		
+		
+		/home/fiji-linux64/Fiji.app/ImageJ-linux64 --ij2 --headless --console -macro /home/fiji-linux64/Fiji.app/bigStitch3D.ijm "${basePath}/##${tilesX}##${tilesY}##${tiles_z}##${file_pattern}##${grid_type}##${overlap_x}##${overlap_y}##${overlap_z}##${voxel_size_x}##${voxel_size_y}##${voxel_size_z}##${voxel_size_unit}##${method}##${output_save}##${downsampleBy}##${file_pattern_defination_bigstitch}##${exportType}##${hdf_chunk_size}" >> $log_file
+		
+		while true ; do
+					if [[ "${output_save}" = *"fused.h5"* ]] || [[ "${output_save}" = *"fused_tp_0_ch_1"* ]]; then
+						break
+					else
+						sleep 5
+					fi
+						
+				done
+		
+		#clean folder
+		echo "........Stitching is done..............."
+	
+	fi
+fi
+
+
+##Regular Stitcher
+
+if [ "$use_bigstitcher" = "False" ]; then
+	order=`cat $1 | jq -r '.order'`
+	channels=`cat $1 | jq -r '.channels'`
+	slices=`cat $1 | jq -r '.slices'`
+	frames=`cat $1 | jq -r '.frames'`
+	blending_type=`cat $1 | jq -r '.blending_type'`
+	overlapp=`cat $1 | jq -r '.overlapp'`
+	grid_size_x=`cat $1 | jq -r '.grid_size_x'`
+	grid_size_y=`cat $1 | jq -r '.grid_size_y'`
+	layout_type==`cat $1 | jq -r '.layout_type'`
+	regression_threshold=`cat $1 | jq -r '.regression_threshold'`
+	avg_displacement_threshold=`cat $1 | jq -r '.avg_displacement_threshold'`
+	absolute_displacement_threshold=`cat $1 | jq -r '.absolute_displacement_threshold'`
+	grid_order=`cat $1 | jq -r '.grid_order'`
+	sequence=`date +%s`
+	
+	
+	
+	
+	if [ -d "$input_folder" ] &&  [ -d "$output_folder" ]; then
+		
+		log_file="${output_folder}/log_${sequence}.txt"
+		touch $log_file
+		
+		echo "..............Starting Stitching process ............"
+		python3 /home/fiji-linux64/Fiji.app/CreateTifStacks_1.py $input_folder $output_folder $frames $channels > $log_file
+		
+		#making stacks 
+		
+		root_dir=$output_folder
+		input_dir=${root_dir}/Ch1_Ch2/
+		output_dir="${root_dir}/composite"
+	
+		composite_type="Color"
+		composite_name="Stiched_movie_composite.tif"
+		
+		for dir in $input_dir*; do
+			echo $dir
+		    if [ -d "$dir" ]; then
+		        name=`basename $dir`
+				echo "................Procesiing $name......................"
+				echo ""
+				time_dir="${input_dir}${name}"
+				file_name=`ls ${time_dir} | head -1` 
+				file_name=`basename $file_name`
+				echo ${time_dir} -- $file_name $output_dir 	
+				out_file_name=`echo $name | sed -e :a -e 's/^.\{1,3\}$/0&/;ta'`
+				cd /home/fiji-linux64/Fiji.app/
+				/home/fiji-linux64/Fiji.app/ImageJ-linux64 --ij2 --headless --console -macro /home/fiji-linux64/Fiji.app/merge_channel.ijm "${time_dir}##0.tif##${output_dir}##${order}##${channels}##${slices}##${frames}##${out_file_name}##${composite_type}" >> $log_file
+			fi
+		done
+		
+		#Stitch
+	
+		echo "................Procesiing ......................"
+		echo ""
+		/home/fiji-linux64/Fiji.app/ImageJ-linux64 --ij2 --headless --console -macro /home/fiji-linux64/Fiji.app/stitch3d.ijm "${grid_size_x}##${grid_size_y}##${overlapp}##${root_dir}/composite/##00{ii}.tif##${blending_type}##${layout_type}##${grid_order}##${regression_threshold}##${avg_displacement_threshold}##${absolute_displacement_threshold}" >> $log_file
+		echo ""
+		
+		#Final stitch
+		
+		output_dir=$output_folder
+		input_dir="${output_folder}/composite/tmp"
+		name="Stiched_movie"
+		order="xyczt"
+		composite_type="Color"
+		composite_name="Stiched_movie_composite"
+		
+		if [ -d "$input_dir" ]; then
+			echo ""
+			file_name=`ls ${input_dir} | head -1`
+			echo ${input_dir} -- $file_name $output_dir 
+			/home/fiji-linux64/Fiji.app/ImageJ-linux64 --ij2 --headless --console -macro /home/fiji-linux64/Fiji.app/merge_channel.ijm "${input_dir}##${file_name}##${output_dir}##${order}##${channels}##${slices}##${frames}##${name}##${composite_type}" >> $log_file
+			composite_type="Composite"	
+			/home/fiji-linux64/Fiji.app/ImageJ-linux64 --ij2 --headless --console -macro /home/fiji-linux64/Fiji.app/merge_channel.ijm "${input_dir}##${file_name}##${output_dir}##${order}##${channels}##${slices}##${frames}##${composite_name}##${composite_type}"
+			echo "........Stitching is done..............."
+		fi
+		
+	else
+	   		echo "$input_folder or $output_folder does not exist."
+	   		
+	fi
+
+fi
+
+
+             
